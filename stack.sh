@@ -17,6 +17,9 @@ Run ./setup.sh once before start. start and stop load both env files:
 
 start requires POSTGRES_PASSWORD and PAPERLESS_SECRET_KEY. A shell value
 wins, then .env.production, then .env. Example placeholders are rejected.
+
+start then runs ./init.sh, which waits for the services, creates the
+Paperless admin account and API token, and connects Paperless-AI.
 EOF
 }
 
@@ -104,6 +107,7 @@ case "${1:-help}" in
     require_env
     require_vars
     compose up -d --build
+    ./init.sh
     ;;
   stop)
     require_env

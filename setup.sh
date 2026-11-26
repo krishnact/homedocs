@@ -39,7 +39,11 @@ write_secret() {
     echo "setup.sh: $file is missing ${key}=${placeholder}" >&2
     exit 1
   fi
-  secret=$(openssl rand -hex 32)
+  if [ "$key" = PAPERLESS_API_TOKEN ]; then
+    secret=$(openssl rand -hex 20)
+  else
+    secret=$(openssl rand -hex 32)
+  fi
   tmp=$(mktemp)
   awk -v key="$key" -v old="$placeholder" -v new="$secret" '
     $0 == key "=" old { print key "=" new; next }
@@ -69,7 +73,9 @@ install_env() {
 
 install_env .env.example .env \
   POSTGRES_PASSWORD CHANGE_ME \
-  PAPERLESS_SECRET_KEY CHANGE_ME
+  PAPERLESS_SECRET_KEY CHANGE_ME \
+  PAPERLESS_ADMIN_PASSWORD CHANGE_ME \
+  PAPERLESS_API_TOKEN CHANGE_ME
 
 install_env .env.production.example .env.production \
   POSTGRES_PASSWORD REPLACE_WITH_RANDOM_PASSWORD \

@@ -7,13 +7,14 @@ Requires Docker Compose v2 and OpenSSL. The bind address defaults to loopback. U
 From the repository directory on the Docker host:
 
 ```sh
-chmod +x setup.sh stack.sh
+chmod +x setup.sh stack.sh init.sh wipe.sh
 ./setup.sh
 ./stack.sh start
-docker compose --env-file .env --env-file .env.production exec webserver createsuperuser
 ```
 
-`./stack.sh stop` stops the stack. `./stack.sh help` lists the commands.
+`./stack.sh start` builds and starts the containers, then runs `./init.sh`. `./init.sh` waits until PostgreSQL, Redis, Tika, Gotenberg, and Paperless are ready, creates the admin password and API token when they are missing, and writes the Paperless-AI connection to `storage/ai/.env`. The admin username is `PAPERLESS_ADMIN_USER`. The password and token stay in `.env`.
+
+`./stack.sh stop` stops the stack. `./wipe.sh` deletes the local installation after you type `WIPE`.
 
 `setup.sh` creates `storage/data`, `storage/media`, `storage/consume`, `storage/export`, `storage/ai`, `storage/backups`, `storage/postgres`, `storage/redis`, and `rclone`. When `.env` or `.env.production` is missing, it copies the matching example, replaces each secret placeholder with its own `openssl rand -hex 32` value, and sets the file mode to 600. Existing env files are left in place and set to mode 600.
 
@@ -30,7 +31,7 @@ docker compose --env-file .env --env-file .env.production stop
 
 `start` builds the backup image and starts the services selected by `COMPOSE_PROFILES` in `.env.production`. The example enables `ai` and `backup`. Before that, it requires `POSTGRES_PASSWORD` and `PAPERLESS_SECRET_KEY`. A value already set in the shell wins, then `.env.production`, then `.env`. Empty values and the example placeholders are rejected. `stop` stops those containers and leaves them in place.
 
-After the first start, create the Paperless user with the `createsuperuser` command above.
+Log in to Paperless with the admin user from `.env`. Run `./init.sh` again after the stack is already up to repeat the readiness checks and reconnect Paperless-AI.
 
 ## OpenDrive
 
@@ -42,7 +43,45 @@ Keep a separate copy of `rclone/rclone.conf` and both crypt secrets. The copy st
 
 ## Paperless-AI
 
-Open the Paperless-AI UI on port 3000 through a trusted connection. In its setup UI, set the Paperless URL to `http://webserver:8000`, plus an API token and the chosen AI provider. Settings persist in `storage/ai`.
+`./init.sh` writes the Paperless connection into `storage/ai/.env`: `http://webserver:8000`, the admin username, and `PAPERLESS_API_TOKEN`.
+
+To set the model without the Paperless-AI UI, uncomment one block in `.env`, fill in the API key, and run `./init.sh` again. That copies the block into `storage/ai/.env` and restarts Paperless-AI. An existing `.env` does not pick up new lines from `.env.example`; add the block yourself. The same blocks are in `.env.example`.
+
+OpenAI:
+
+```
+AI_PROVIDER=openai
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-5-mini
+```
+
+Grok (xAI). Paperless-AI uses the `custom` provider for this API:
+
+```
+AI_PROVIDER=custom
+CUSTOM_BASE_URL=https://api.x.ai/v1
+CUSTOM_API_KEY=
+CUSTOM_MODEL=grok-4
+```
+
+Claude:
+
+```
+AI_PROVIDER=anthropic
+ANTHROPIC_API_KEY=
+ANTHROPIC_MODEL=claude-haiku-4-5
+```
+
+OpenRouter. `CUSTOM_MODEL` is the OpenRouter model id, such as `openai/gpt-4o-mini`:
+
+```
+AI_PROVIDER=custom
+CUSTOM_BASE_URL=https://openrouter.ai/api/v1
+CUSTOM_API_KEY=
+CUSTOM_MODEL=openai/gpt-4o-mini
+```
+
+Keep a single `AI_PROVIDER` block. Grok and OpenRouter both use `custom`, so only one of those base URLs can be active. `./init.sh` replaces the previous provider lines in `storage/ai/.env`.
 
 Configure Paperless Mobile with the external HTTPS URL.
 

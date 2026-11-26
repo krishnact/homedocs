@@ -59,7 +59,12 @@ services:
       PAPERLESS_THREADS_PER_WORKER: ${THREADS_PER_WORKER:-1}
       USERMAP_UID: ${PUID:-1000}
       USERMAP_GID: ${PGID:-1000}
+      PAPERLESS_ADMIN_USER: ${PAPERLESS_ADMIN_USER:-admin}
+      PAPERLESS_ADMIN_MAIL: ${PAPERLESS_ADMIN_EMAIL:-admin@localhost}
+      PAPERLESS_ADMIN_PASSWORD: ${PAPERLESS_ADMIN_PASSWORD:-}
+      PAPERLESS_API_TOKEN: ${PAPERLESS_API_TOKEN:-}
     volumes: &paperless-volumes
+      - ./ai/bootstrap.py:/usr/src/paperless/bootstrap-ai.py:ro
       - ./storage/data:/usr/src/paperless/data
       - ./storage/media:/usr/src/paperless/media
       - ./storage/consume:/usr/src/paperless/consume
