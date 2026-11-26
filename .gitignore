@@ -1,0 +1,6 @@
+.env
+.env.production
+storage/
+rclone/*
+!rclone/README.md
+!rclone/rclone.conf.example

@@ -1,0 +1,12 @@
+[opendrive]
+type = opendrive
+username = you@example.com
+password = REPLACE_WITH_OBSCURED_PASSWORD
+
+[opendrive-crypt]
+type = crypt
+remote = opendrive:paperless-backup
+filename_encryption = standard
+directory_name_encryption = true
+password = REPLACE_WITH_OBSCURED_PASSPHRASE
+password2 = REPLACE_WITH_OBSCURED_SALT

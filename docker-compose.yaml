@@ -1,14 +1,14 @@
 name: ${STACK_NAME:-paperless}
 services:
   db:
-    image: postgres:${POSTGRES_VERSION:-16}
+    image: postgres:${POSTGRES_VERSION:-18}
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-paperless}
       POSTGRES_USER: ${POSTGRES_USER:-paperless}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
     volumes:
-      - ${DATA_ROOT:-./storage}/postgres:/var/lib/postgresql/data
+      - ./storage/postgres:/var/lib/postgresql
     healthcheck:
       test: [CMD-SHELL, 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
       interval: 10s
@@ -18,7 +18,7 @@ services:
     image: redis:${REDIS_VERSION:-7-alpine}
     restart: unless-stopped
     volumes:
-      - ${DATA_ROOT:-./storage}/redis:/data
+      - ./storage/redis:/data
   tika:
     image: apache/tika:${TIKA_VERSION:-latest}
     restart: unless-stopped
@@ -58,10 +58,10 @@ services:
       USERMAP_UID: ${PUID:-1000}
       USERMAP_GID: ${PGID:-1000}
     volumes: &paperless-volumes
-      - ${DATA_ROOT:-./storage}/data:/usr/src/paperless/data
-      - ${DATA_ROOT:-./storage}/media:/usr/src/paperless/media
-      - ${DATA_ROOT:-./storage}/consume:/usr/src/paperless/consume
-      - ${DATA_ROOT:-./storage}/export:/usr/src/paperless/export
+      - ./storage/data:/usr/src/paperless/data
+      - ./storage/media:/usr/src/paperless/media
+      - ./storage/consume:/usr/src/paperless/consume
+      - ./storage/export:/usr/src/paperless/export
   paperless-ai:
     profiles: [ai]
     image: clusterzx/paperless-ai:${PAPERLESS_AI_VERSION:-latest}
@@ -70,13 +70,13 @@ services:
     ports:
       - '${BIND_ADDRESS:-127.0.0.1}:${AI_PORT:-3000}:3000'
     volumes:
-      - ${DATA_ROOT:-./storage}/ai:/app/data
+      - ./storage/ai:/app/data
   backup:
     profiles: [backup]
     build:
       context: ./backup
       args:
-        POSTGRES_VERSION: ${POSTGRES_VERSION:-16}
+        POSTGRES_VERSION: ${POSTGRES_VERSION:-18}
     restart: unless-stopped
     depends_on:
       db:
@@ -90,9 +90,9 @@ services:
       BACKUP_REMOTE: ${BACKUP_REMOTE:-opendrive-crypt:paperless-backup}
       RCLONE_CONFIG: /config/rclone/rclone.conf
     volumes:
-      - ${DATA_ROOT:-./storage}/media:/source/media:ro
-      - ${DATA_ROOT:-./storage}/data:/source/data:ro
-      - ${DATA_ROOT:-./storage}/ai:/source/ai:ro
-      - ${DATA_ROOT:-./storage}/backups:/backup
-      - ${RCLONE_CONFIG_DIR:-./rclone}:/config/rclone
+      - ./storage/media:/source/media:ro
+      - ./storage/data:/source/data:ro
+      - ./storage/ai:/source/ai:ro
+      - ./storage/backups:/backup
+      - ./rclone:/config/rclone
       - ./:/deployment:ro

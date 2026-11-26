@@ -1,34 +1,81 @@
 # Paperless mail stack
 
-Requires Docker Compose v2. Replace secrets in both environment files as appropriate; use `openssl rand -hex 32` for each secret. Change the production URL. Protect env files with chmod 600. Bind address defaults to loopback: use an HTTPS reverse proxy or change to a trusted LAN address for phone access. Do not expose PostgreSQL or Redis.
+Requires Docker Compose v2 and OpenSSL. The bind address defaults to loopback. Use an HTTPS reverse proxy, or set a trusted LAN address for phone access. Do not expose PostgreSQL or Redis.
+
+## Quickstart
+
+From the repository directory on the Docker host:
 
 ```sh
-mkdir -p storage/{data,media,consume,export,ai,backups,postgres,redis} rclone
-chmod 600 .env .env.production
-docker compose --env-file .env --env-file .env.production up -d db redis tika gotenberg webserver
+chmod +x setup.sh stack.sh
+./setup.sh
+./stack.sh start
 docker compose --env-file .env --env-file .env.production exec webserver createsuperuser
 ```
 
-Configure OpenDrive and then a crypt remote named opendrive-crypt pointing to a dedicated folder on OpenDrive:
+`./stack.sh stop` stops the stack. `./stack.sh help` lists the commands.
 
-```sh
-docker run --rm -it -v "$PWD/rclone:/config/rclone" rclone/rclone config
-docker run --rm -v "$PWD/rclone:/config/rclone" rclone/rclone lsd opendrive-crypt:
-```
+`setup.sh` creates `storage/data`, `storage/media`, `storage/consume`, `storage/export`, `storage/ai`, `storage/backups`, `storage/postgres`, `storage/redis`, and `rclone`. When `.env` or `.env.production` is missing, it copies the matching example, replaces each secret placeholder with its own `openssl rand -hex 32` value, and sets the file mode to 600. Existing env files are left in place and set to mode 600.
 
-Keep the rclone configuration and encryption passwords in a separate secure backup. Do not store the only copy on the encrypted remote itself.
+Every bind mount is a directory next to the compose file: service data under `storage/`, and the rclone config under `rclone/`. Copy or move this directory and the data goes with it.
 
-Start all production services:
+`.env.production` overrides `.env` for `PAPERLESS_URL`, `POSTGRES_PASSWORD`, `PAPERLESS_SECRET_KEY`, and `COMPOSE_PROFILES`. Change `PAPERLESS_URL` in `.env.production`. The example value is `https://paperless.example.com`.
+
+`stack.sh start` and `stack.sh stop` pass both env files. Compose loads `.env` on its own only when no `--env-file` flag is present, so the script names `.env` first and `.env.production` second:
 
 ```sh
 docker compose --env-file .env --env-file .env.production up -d --build
+docker compose --env-file .env --env-file .env.production stop
 ```
 
-Paperless-AI: open its UI on port 3000 through a trusted connection. Configure the Paperless URL `http://webserver:8000`, API token and chosen AI provider in its setup UI. Its settings persist in storage/ai. Configure Paperless Mobile using the external HTTPS URL. For n8n use a Paperless workflow webhook if supported by your installed version, or poll its REST API for new documents. AI and n8n are not preconfigured.
+`start` builds the backup image and starts the services selected by `COMPOSE_PROFILES` in `.env.production`. The example enables `ai` and `backup`. Before that, it requires `POSTGRES_PASSWORD` and `PAPERLESS_SECRET_KEY`. A value already set in the shell wins, then `.env.production`, then `.env`. Empty values and the example placeholders are rejected. `stop` stops those containers and leaves them in place.
 
-Backup runs immediately and then every 86400 seconds by default. It uploads timestamped encrypted snapshots; SHA256SUMS is uploaded last as a completion marker. No remote retention/deletion is configured. Full snapshots can consume significant storage. Live database and filesystem snapshots are not atomic: for a consistent backup, pause ingestion and stop webserver and paperless-ai before running `docker compose --env-file .env --env-file .env.production exec backup /usr/local/bin/backup.sh once`, then restart them. Avoid concurrent backup runs. For portable application-level exports use `docker compose --env-file .env --env-file .env.production exec -T webserver document_exporter ../export` and copy the export separately to the encrypted remote.
+After the first start, create the Paperless user with the `createsuperuser` command above.
 
-Restore: download a completed timestamped snapshot using rclone, verify `sha256sum -c SHA256SUMS`, stop application services, restore media/data/ai archives into DATA_ROOT, and restore database.dump into an empty PostgreSQL database using pg_restore with matching credentials. Restore deployment files selectively. Rebuild search index if necessary. Test restore before relying on backups. The backup does not include pending consume files or Redis queue state. Keep version tags pinned after testing; latest is supplied for initial evaluation only.
+## OpenDrive
+
+Copy `rclone/rclone.conf.example` to `rclone/rclone.conf` and fill in the OpenDrive account. The steps, including how to obscure the passwords, are in `rclone/README.md`.
+
+The backup remote is `opendrive-crypt:paperless-backup`. `opendrive-crypt` encrypts the OpenDrive folder `paperless-backup`.
+
+Keep a separate copy of `rclone/rclone.conf` and both crypt secrets. The copy stored on OpenDrive cannot be decrypted without them.
+
+## Paperless-AI
+
+Open the Paperless-AI UI on port 3000 through a trusted connection. In its setup UI, set the Paperless URL to `http://webserver:8000`, plus an API token and the chosen AI provider. Settings persist in `storage/ai`.
+
+Configure Paperless Mobile with the external HTTPS URL.
+
+For n8n, use a Paperless workflow webhook when the installed version supports it, or poll the REST API for new documents. AI and n8n are not preconfigured.
+
+## Backup
+
+Backup runs immediately, then every 86400 seconds by default. It uploads timestamped encrypted snapshots. `SHA256SUMS` is uploaded last as a completion marker. No remote retention or deletion is configured. Full snapshots can consume significant storage.
+
+Live database and filesystem snapshots are not atomic. For a consistent backup, pause ingestion and stop `webserver` and `paperless-ai`, run the command below, then restart them. Avoid concurrent backup runs.
+
+```sh
+docker compose --env-file .env --env-file .env.production exec backup /usr/local/bin/backup.sh once
+```
+
+For a portable application-level export:
+
+```sh
+docker compose --env-file .env --env-file .env.production exec -T webserver document_exporter ../export
+```
+
+Copy that export separately to the encrypted remote.
+
+## Restore
+
+1. Download a completed timestamped snapshot with rclone.
+2. Verify it with `sha256sum -c SHA256SUMS`.
+3. Stop the application services.
+4. Restore the media, data, and ai archives into `storage/`.
+5. Restore `database.dump` into an empty PostgreSQL database with `pg_restore` and matching credentials.
+6. Restore deployment files selectively.
+7. Rebuild the search index if necessary.
+
+Test a restore before relying on backups. The backup does not include pending consume files or Redis queue state. Keep version tags pinned after testing. `latest` is supplied for initial evaluation only.
 
 This stack has not been run against a live Docker daemon or OpenDrive account. Check current image versions and application compatibility before production use.
-# homedocs
