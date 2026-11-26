@@ -4,7 +4,7 @@ services:
     image: postgres:${POSTGRES_VERSION:-18}
     restart: unless-stopped
     user: "0:0"
-    entrypoint: ["/bin/sh", "-c", "chmod 1777 /var/lib/postgresql && exec docker-entrypoint.sh \"$$@\"", "docker-entrypoint.sh"]
+    entrypoint: ["/bin/sh", "-c", "chmod 1777 /var/lib/postgresql && exec docker-entrypoint.sh postgres"]
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-paperless}
       POSTGRES_USER: ${POSTGRES_USER:-paperless}
