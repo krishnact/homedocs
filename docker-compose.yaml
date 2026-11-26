@@ -89,6 +89,9 @@ services:
       BACKUP_INTERVAL: ${BACKUP_INTERVAL:-86400}
       BACKUP_REMOTE: ${BACKUP_REMOTE:-opendrive-crypt:paperless-backup}
       RCLONE_CONFIG: /config/rclone/rclone.conf
+      DEGOO_EMAIL: ${DEGOO_EMAIL:-}
+      DEGOO_PASSWORD: ${DEGOO_PASSWORD:-}
+      DEGOO_REMOTE: ${DEGOO_REMOTE:-/Web/paperless-backup}
     volumes:
       - ./storage/media:/source/media:ro
       - ./storage/data:/source/data:ro

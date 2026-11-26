@@ -50,7 +50,9 @@ For n8n, use a Paperless workflow webhook when the installed version supports it
 
 ## Backup
 
-Backup runs immediately, then every 86400 seconds by default. It uploads timestamped encrypted snapshots. `SHA256SUMS` is uploaded last as a completion marker. No remote retention or deletion is configured. Full snapshots can consume significant storage.
+Backup runs immediately, then every 86400 seconds by default. It uploads timestamped snapshots. `SHA256SUMS` is uploaded last as a completion marker. No remote retention or deletion is configured. Full snapshots can consume significant storage.
+
+OpenDrive receives every snapshot through the encrypted `opendrive-crypt` remote. Set `DEGOO_EMAIL` and `DEGOO_PASSWORD` to also upload that snapshot with [cligoo](https://github.com/marcomc/cligoo). Leave both empty to skip Degoo. `DEGOO_REMOTE` defaults to `/Web/paperless-backup`. cligoo is an unofficial Degoo client. Degoo stores the files without the client-side encryption used for OpenDrive, and the deployment archive includes `.env` and `.env.production`.
 
 Live database and filesystem snapshots are not atomic. For a consistent backup, pause ingestion and stop `webserver` and `paperless-ai`, run the command below, then restart them. Avoid concurrent backup runs.
 
@@ -68,7 +70,7 @@ Copy that export separately to the encrypted remote.
 
 ## Restore
 
-1. Download a completed timestamped snapshot with rclone.
+1. Download a completed timestamped snapshot with rclone, or with `cligoo download /Web/paperless-backup/<stamp> -t ./restore -r` when the copy is on Degoo.
 2. Verify it with `sha256sum -c SHA256SUMS`.
 3. Stop the application services.
 4. Restore the media, data, and ai archives into `storage/`.
