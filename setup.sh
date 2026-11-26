@@ -25,6 +25,7 @@ mkdir -p \
   storage/postgres \
   storage/redis \
   rclone
+chmod 1777 storage/postgres
 
 write_secret() {
   file=$1
