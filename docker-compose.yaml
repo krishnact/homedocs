@@ -1,0 +1,98 @@
+name: ${STACK_NAME:-paperless}
+services:
+  db:
+    image: postgres:${POSTGRES_VERSION:-16}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-paperless}
+      POSTGRES_USER: ${POSTGRES_USER:-paperless}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - ${DATA_ROOT:-./storage}/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  redis:
+    image: redis:${REDIS_VERSION:-7-alpine}
+    restart: unless-stopped
+    volumes:
+      - ${DATA_ROOT:-./storage}/redis:/data
+  tika:
+    image: apache/tika:${TIKA_VERSION:-latest}
+    restart: unless-stopped
+  gotenberg:
+    image: gotenberg/gotenberg:${GOTENBERG_VERSION:-8}
+    restart: unless-stopped
+    command: [gotenberg, '--chromium-disable-javascript=true', '--chromium-allow-list=file:///tmp/.*']
+  webserver:
+    image: ghcr.io/paperless-ngx/paperless-ngx:${PAPERLESS_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      tika:
+        condition: service_started
+      gotenberg:
+        condition: service_started
+    ports:
+      - '${BIND_ADDRESS:-127.0.0.1}:${PAPERLESS_PORT:-8000}:8000'
+    environment: &paperless-env
+      PAPERLESS_REDIS: redis://redis:6379
+      PAPERLESS_DBHOST: db
+      PAPERLESS_DBNAME: ${POSTGRES_DB:-paperless}
+      PAPERLESS_DBUSER: ${POSTGRES_USER:-paperless}
+      PAPERLESS_DBPASS: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY:?Set PAPERLESS_SECRET_KEY}
+      PAPERLESS_URL: ${PAPERLESS_URL:-http://localhost:8000}
+      PAPERLESS_TIME_ZONE: ${TZ:-America/New_York}
+      PAPERLESS_OCR_LANGUAGE: ${OCR_LANGUAGE:-eng}
+      PAPERLESS_TIKA_ENABLED: '1'
+      PAPERLESS_TIKA_ENDPOINT: http://tika:9998
+      PAPERLESS_TIKA_GOTENBERG_ENDPOINT: http://gotenberg:3000
+      PAPERLESS_TASK_WORKERS: ${TASK_WORKERS:-2}
+      PAPERLESS_THREADS_PER_WORKER: ${THREADS_PER_WORKER:-1}
+      USERMAP_UID: ${PUID:-1000}
+      USERMAP_GID: ${PGID:-1000}
+    volumes: &paperless-volumes
+      - ${DATA_ROOT:-./storage}/data:/usr/src/paperless/data
+      - ${DATA_ROOT:-./storage}/media:/usr/src/paperless/media
+      - ${DATA_ROOT:-./storage}/consume:/usr/src/paperless/consume
+      - ${DATA_ROOT:-./storage}/export:/usr/src/paperless/export
+  paperless-ai:
+    profiles: [ai]
+    image: clusterzx/paperless-ai:${PAPERLESS_AI_VERSION:-latest}
+    restart: unless-stopped
+    depends_on: [webserver]
+    ports:
+      - '${BIND_ADDRESS:-127.0.0.1}:${AI_PORT:-3000}:3000'
+    volumes:
+      - ${DATA_ROOT:-./storage}/ai:/app/data
+  backup:
+    profiles: [backup]
+    build:
+      context: ./backup
+      args:
+        POSTGRES_VERSION: ${POSTGRES_VERSION:-16}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGDATABASE: ${POSTGRES_DB:-paperless}
+      PGUSER: ${POSTGRES_USER:-paperless}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      BACKUP_INTERVAL: ${BACKUP_INTERVAL:-86400}
+      BACKUP_REMOTE: ${BACKUP_REMOTE:-opendrive-crypt:paperless-backup}
+      RCLONE_CONFIG: /config/rclone/rclone.conf
+    volumes:
+      - ${DATA_ROOT:-./storage}/media:/source/media:ro
+      - ${DATA_ROOT:-./storage}/data:/source/data:ro
+      - ${DATA_ROOT:-./storage}/ai:/source/ai:ro
+      - ${DATA_ROOT:-./storage}/backups:/backup
+      - ${RCLONE_CONFIG_DIR:-./rclone}:/config/rclone
+      - ./:/deployment:ro
